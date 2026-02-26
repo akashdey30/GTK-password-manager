@@ -1,0 +1,55 @@
+/* GTK Password Vault – Light Theme (Google Material-inspired) */
+window {
+  background-color: #f8f9fa;
+  color: #202124;
+}
+window.vault-window headerbar {
+  background-color: #ffffff;
+  border-bottom: 1px solid #e0e0e0;
+}
+.login-card {
+  background-color: #ffffff;
+  border-radius: 12px;
+  padding: 40px 48px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.08);
+}
+.login-title  { font-size: 24px; font-weight: 700; color: #202124; }
+.login-subtitle { font-size: 13px; color: #5f6368; }
+button.suggested-action {
+  background-color: #1a73e8;
+  color: #ffffff;
+  border-radius: 6px;
+  font-weight: 600;
+  padding: 10px 24px;
+  border: none;
+}
+button.suggested-action:hover { background-color: #1765cc; }
+button.destructive-action {
+  background-color: #d93025;
+  color: #ffffff;
+  border-radius: 6px;
+  border: none;
+}
+.sidebar { background-color: #ffffff; border-right: 1px solid #e0e0e0; }
+.sidebar row { padding: 6px 12px; border-radius: 6px; margin: 1px 6px; }
+.sidebar row:selected { background-color: #e8f0fe; color: #1a73e8; }
+.cred-row {
+  background-color: #ffffff;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 4px 8px;
+  border: 1px solid #e0e0e0;
+}
+.cred-row:hover { background-color: #f1f3f4; border-color: #c5c5c5; }
+.cred-avatar { background-color: #e8f0fe; border-radius: 50%; }
+.cred-title { font-weight: 600; font-size: 14px; color: #202124; }
+.cred-username { font-size: 12px; color: #5f6368; }
+.search-entry {
+  border-radius: 24px;
+  padding: 6px 16px;
+  background-color: #f1f3f4;
+  border: 1px solid transparent;
+}
+.search-entry:focus { border-color: #1a73e8; background-color: #ffffff; }
+button.link { color: #1a73e8; background: none; border: none; padding: 0; }
+button.link:hover { color: #1765cc; text-decoration: underline; }

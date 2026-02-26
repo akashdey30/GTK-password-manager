@@ -1,0 +1,11 @@
+build/
+*.o
+*.a
+*.so
+*.d
+*.vaultbak
+vault.db
+vault.log
+.DS_Store
+.idea/
+*.swp
