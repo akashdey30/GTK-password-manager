@@ -6,4 +6,6 @@ Updated_GTK_password_vault: Contains the latest updated version of the project w
 
 Old_GTK_password_vaultr: Contains the previous version of the project as it existed before the latest update. This copy has been preserved for reference, backup, or comparison purposes.
 
+The code in the main repository, gtk-password-vault.c, is the same as the version contained within the Old_GTK_password_vault folder. This duplication was necessary because, at the time, I was not fully familiar with GitHub workflows and needed to preserve the previous version separately.
+
 The duplication exists intentionally to keep a history of the project directly in the repository, making it easy to review or restore old functionality if needed, without losing the latest version.
