@@ -1,5 +1,0 @@
-   cd /c/Users/USER/Desktop/password_vault
-
-   	gcc -Iinclude src/*.c -o PasswordVault $(pkg-config --cflags --libs gtk+-3.0)
-./PasswordVault.exe
-        	

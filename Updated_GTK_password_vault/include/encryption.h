@@ -3,7 +3,8 @@
 
 #include <stddef.h>
 
-// Applies XOR encryption/decryption to a buffer
+#define XOR_KEY 5
+
 void xor_buffer(unsigned char *buf, size_t len);
 
-#endif
+#endif // ENCRYPTION_H

@@ -11,10 +11,12 @@ This project was originally implemented as a **single monolithic file** and late
 * Secure credential storage
 * Master password authentication
 * Password recovery system
-* Encrypted vault storage
+* Encrypted vault storage (XOR keyed on master password)
 * GTK graphical interface
 * Modular C architecture
 * Separation of UI, logic, and storage layers
+* Zero global variables — all state in `AppState`
+* Full Doxygen documentation on all public functions
 
 ---
 
@@ -24,22 +26,22 @@ The application follows a **layered architecture** to separate responsibilities 
 
 ```
         GTK User Interface
-             (ui.c)
+          (ui.c / dialogs.c)
                  │
                  ▼
      ┌──────────────────────┐
      │   Application Logic  │
      │                      │
-     │ master_auth.c       │
-     │ service_manager.c   │
+     │  master_auth.c       │
+     │  service_manager.c   │
      └──────────────────────┘
                  │
                  ▼
      ┌──────────────────────┐
-     │     Storage Layer    │
+     │   Infrastructure     │
      │                      │
-     │ vault_storage.c      │
-     │ encryption.c         │
+     │  vault_storage.c     │
+     │  encryption.c        │
      └──────────────────────┘
                  │
                  ▼
@@ -49,12 +51,14 @@ The application follows a **layered architecture** to separate responsibilities 
 
 Each layer has a clearly defined responsibility:
 
-| Layer   | Responsibility                           |
-| ------- | ---------------------------------------- |
-| UI      | GTK windows and user interaction         |
-| Logic   | Authentication and credential management |
-| Storage | Encryption and file persistence          |
-| Data    | Encrypted vault files                    |
+| Layer          | Responsibility                                |
+| -------------- | --------------------------------------------- |
+| UI             | GTK windows, dialogs, and user interaction    |
+| Logic          | Authentication and credential management      |
+| Infrastructure | Encryption and file persistence               |
+| Data           | Encrypted vault files                         |
+
+**Dependency rule:** UI → Logic → Infrastructure → Foundation. No upward dependencies. No circular includes.
 
 ---
 
@@ -100,10 +104,10 @@ Defines the central application state structure.
 
 Responsibilities:
 
-* Hold session master password
-* Store GTK window pointers
-* Track login state
-* Maintain runtime credential list
+* Hold session master password (`session_master[MAX_LEN]`)
+* Store GTK main window pointer (`main_window`)
+* Track login state (`login_success`)
+* Maintain runtime credential list (`credentials` — `GList*`)
 
 This struct replaces the original **global variables** used in the monolithic version.
 
@@ -115,15 +119,17 @@ This struct replaces the original **global variables** used in the monolithic ve
 
 Defines the data structure representing stored credentials.
 
-Typical fields include:
+Fields:
 
 ```
-service_name
-username
-password
+service_name[MAX_LEN]
+username[MAX_LEN]
+password[MAX_LEN]
 ```
 
-This structure is used by both the **service manager** and **vault storage modules**.
+This structure is used by both the **service manager** and **vault storage** modules.
+
+> Note: The field is named `service_name` (not `service`) to follow the full descriptive `snake_case` convention applied throughout ver2.
 
 ---
 
@@ -133,13 +139,13 @@ This structure is used by both the **service manager** and **vault storage modul
 
 Provides reusable GTK dialog functions.
 
-Examples:
+Functions:
 
-* Error dialogs
-* Confirmation prompts
-* Information messages
+* `dialogs_show_error(GtkWidget *parent, const char *message)` — modal error pop-up
+* `dialogs_show_input(GtkWidget *parent, const char *prompt)` — returns user-entered string (caller must `g_free()`)
+* `dialogs_show_confirm(GtkWidget *parent, const char *question)` — returns `TRUE` if confirmed
 
-Centralizing dialogs keeps the UI consistent.
+**This module has no dependency on `AppState`** — it accepts only a `GtkWidget *parent` pointer. Centralizing dialogs keeps the UI consistent and keeps other modules free of inline `GtkDialog` construction.
 
 ---
 
@@ -149,15 +155,14 @@ Centralizing dialogs keeps the UI consistent.
 
 Handles encryption and decryption of vault data.
 
-Responsibilities:
+Functions:
 
 ```
-crypto_encrypt()
-crypto_decrypt()
+encryption_encrypt(const char *input, const char *key, char *output)
+encryption_decrypt(const char *input, const char *key, char *output)
 ```
 
-Encryption currently uses a simple XOR-based method derived from the master password.
-This module is isolated so stronger encryption methods can easily replace it.
+Encryption uses a XOR-based method **keyed on the master password** (`app->session_master`). The key is passed by the caller — this module has **zero dependency on `AppState` or GTK**. Because XOR is symmetric, `encryption_decrypt()` delegates directly to `encryption_encrypt()`. This module is isolated so stronger encryption can easily replace it by editing only this file.
 
 ---
 
@@ -167,14 +172,13 @@ This module is isolated so stronger encryption methods can easily replace it.
 
 Controls access to the vault.
 
-Responsibilities:
+Functions:
 
-* Verify master password
-* Prompt login dialog
-* Handle password recovery
-* Reset master password when recovery answer is correct
+* `master_auth_setup()` — first-run master password creation, saves to `vault_master.dat`
+* `master_auth_verify()` — compares input against stored record in `vault_master.dat`
+* `master_auth_recover()` — validates recovery answer and allows password reset
 
-This module acts as the **security gateway of the application**.
+No GTK widget construction happens in this module — all dialog prompts are delegated to `dialogs.c`. This module acts as the **security gateway of the application**.
 
 ---
 
@@ -184,14 +188,13 @@ This module acts as the **security gateway of the application**.
 
 Manages the in-memory credential list.
 
-Responsibilities:
+Functions:
 
-* Add credentials
-* Remove credentials
-* Retrieve credentials
-* Manage credential data structures
+* `service_manager_add()` — appends to `app->credentials` and saves to `vault_creds.dat`
+* `service_manager_delete()` — removes by index and rewrites `vault_creds.dat`
+* `service_manager_load_all()` — populates `app->credentials` from decrypted `vault_creds.dat`
 
-This module contains the **core vault business logic**.
+Internal helper `service_manager_find_dup()` is marked `static` — prevents storing the same service name twice and is invisible outside this file.
 
 ---
 
@@ -201,20 +204,12 @@ This module contains the **core vault business logic**.
 
 Implements the GTK graphical interface.
 
-Responsibilities:
+Functions:
 
-* Build login window
-* Build vault dashboard
-* Display credentials
-* Connect UI actions to backend logic
+* `ui_build_main_window()` — constructs the full application layout and wires all signals
+* `ui_refresh_services()` — clears and repopulates the credential list view from `app->credentials`
 
-This module coordinates communication between:
-
-```
-master_auth
-service_manager
-vault_storage
-```
+All GTK signal callbacks (`on_login_clicked`, `on_add_clicked`, `on_delete_clicked`) are `static` — invisible outside `ui.c`. This module coordinates communication between `master_auth`, `service_manager`, and `vault_storage`.
 
 ---
 
@@ -224,19 +219,20 @@ vault_storage
 
 Handles file persistence of vault data.
 
-Responsibilities:
+Functions:
 
-* Load vault files
-* Save encrypted credentials
-* Manage vault data files
+* `vault_storage_save_creds()` / `vault_storage_load_creds()` — operate on `vault_creds.dat` only
+* `vault_storage_save_master()` / `vault_storage_load_master()` — operate on `vault_master.dat` only
+
+All encryption is delegated to `encryption.c` — no XOR logic lives here. The two file operations are fully independent: changing the master password never touches credential storage and vice versa.
 
 Data files used:
 
-| File             | Purpose                           |
-| ---------------- | --------------------------------- |
-| vault.dat        | main encrypted vault              |
-| vault_creds.dat  | stored credential entries         |
-| vault_master.dat | master password and recovery info |
+| File              | Purpose                                     |
+| ----------------- | ------------------------------------------- |
+| `vault.dat`       | Vault metadata / general state              |
+| `vault_creds.dat` | Encrypted credential entries only           |
+| `vault_master.dat`| Encrypted master password and recovery info |
 
 ---
 
@@ -251,7 +247,7 @@ data/
 └── vault_master.dat
 ```
 
-These files contain encrypted credential information and authentication data.
+`vault_creds.dat` and `vault_master.dat` are fully independent — modifying one never rewrites the other.
 
 ---
 
@@ -261,89 +257,178 @@ The project was refactored using structured AI prompts to transform the original
 
 ---
 
-## Prompt 1 — Remove Global Variables
-
-```
-Refactor the C program to remove all global variables.
-
-Introduce a struct named AppState to store all shared application state
-such as GTK widgets, session data, and credential lists.
-
-Update all functions to receive an AppState pointer instead of
-accessing global variables.
-```
-
----
-
-## Prompt 2 — Add Doxygen Documentation
-
-```
-Add Doxygen-style comments to every function.
-
-Each function must include:
-
-@brief
-@param descriptions
-@return description
-```
-
----
-
-## Prompt 3 — Split the Monolithic File into Modules
+## Prompt 1 — Split the Monolithic File into Modules
 
 ```
 Refactor the single large C file into multiple modules:
 
-app_state
-master_auth
-service_manager
-vault_storage
-encryption
-ui
-dialogs
+  app_state      — AppState struct and all #define constants
+  credential     — Credential struct (service_name, username, password)
+  master_auth    — master password setup, verify, recovery
+  service_manager — credential add, delete, load, search
+  vault_storage  — vault_creds.dat and vault_master.dat read/write
+  encryption     — XOR encrypt and decrypt using master key
+  ui             — GTK window construction and signal wiring
+  dialogs        — all GTK dialog construction (no AppState dependency)
 
 Each module should have a header file and source file.
+Use #ifndef include guards on all headers.
 ```
 
 ---
 
-## Prompt 4 — Standardize Naming Conventions
+## Prompt 2 — Remove Global Variables
 
 ```
-Rename functions using module prefixes:
+Refactor the C program to remove all global variables.
 
-ma_  → master authentication
-vs_  → vault storage
-crypto_ → encryption
-ui_  → user interface
+Introduce a struct named AppState in include/app_state.h to store all
+shared application state:
+  session_master[MAX_LEN], credentials (GList*), main_window, login_success
+
+Introduce a struct named Credential in include/credential.h:
+  service_name[MAX_LEN], username[MAX_LEN], password[MAX_LEN]
+
+Update all functions to receive an AppState pointer instead of
+accessing global variables. GTK callbacks receive it via gpointer user_data.
+```
+
+---
+
+## Prompt 3 — Standardize Naming Conventions
+
+```
+Apply the following naming conventions consistently to every identifier:
+
+  Local variables / parameters → snake_case
+  Struct type names             → PascalCase  (AppState, Credential)
+  Struct members                → snake_case
+  Functions                     → module_verb_object() style
+  Header guards                 → UPPER_SNAKE_CASE_H
+
+Function naming table:
+  master_auth_*     → master_auth_setup(), master_auth_verify(), master_auth_recover()
+  service_manager_* → service_manager_add(), service_manager_delete(),
+                      service_manager_load_all()
+  vault_storage_*   → vault_storage_save_creds(), vault_storage_load_creds(),
+                      vault_storage_save_master(), vault_storage_load_master()
+  encryption_*      → encryption_encrypt(), encryption_decrypt()
+  dialogs_*         → dialogs_show_error(), dialogs_show_input(), dialogs_show_confirm()
+  ui_*              → ui_build_main_window(), ui_refresh_services()
+```
+
+---
+
+## Prompt 4 — Separate Data Files by Concern
+
+```
+Refactor vault_storage.c to use two separate data files:
+
+  vault_master.dat — stores ONLY the encrypted master password record
+  vault_creds.dat  — stores ONLY the encrypted credential entries
+
+After this change:
+- Changing the master password must NOT rewrite credential data
+- Adding a credential must NOT rewrite master password data
+```
+
+---
+
+## Prompt 5 — Encapsulate Encryption
+
+```
+Move all XOR logic exclusively to encryption.c.
+
+Create:
+  encryption_encrypt(const char *input, const char *key, char *output)
+  encryption_decrypt(const char *input, const char *key, char *output)
+
+The key parameter is always app->session_master (passed by the caller).
+These functions must have NO dependency on AppState or GTK.
+
+Replace every inline XOR site in vault_storage.c with calls to these functions.
+```
+
+---
+
+## Prompt 6 — Centralise GTK Dialogs
+
+```
+Move all GTK dialog construction to dialogs.c.
+
+Create:
+  void     dialogs_show_error(GtkWidget *parent, const char *message)
+  char    *dialogs_show_input(GtkWidget *parent, const char *prompt)
+  gboolean dialogs_show_confirm(GtkWidget *parent, const char *question)
+
+Rules:
+- dialogs.c must NOT depend on AppState
+- dialogs_show_input() returns a newly allocated string — caller must g_free() it
+```
+
+---
+
+## Prompt 7 — Add null safety to cleanup
+
+```
+Rewrite app_cleanup(AppState *app) so every resource is null-checked
+before being freed:
+
+  if (app->credentials)  g_list_free_full(app->credentials, g_free);
+  if (app->main_window)  gtk_widget_destroy(app->main_window);
+  g_free(app);
+```
+
+---
+
+## Prompt 8 — Mark internal functions as `static`
+
+```
+Mark all functions that are only used within their own .c file as static.
+
+  service_manager.c: service_manager_find_dup()
+  ui.c: build_login_form(), build_main_layout(),
+        on_login_clicked(), on_add_clicked(), on_delete_clicked()
+```
+
+---
+
+## Prompt 9 — Add Doxygen Documentation
+
+```
+Add a Doxygen comment block to every function declaration in every header file:
+
+/**
+ * @brief One sentence describing what the function does.
+ *
+ * @param param_name  Description of the parameter.
+ * @return            Description of the return value, or void.
+ */
 ```
 
 ---
 
 # 🛠 Build Instructions
 
-### Install GTK development libraries
+### Install GTK development libraries (Linux)
 
-On Linux:
-
-```
+```bash
 sudo apt install libgtk-3-dev
 ```
 
----
+### Compile and run (Windows MSYS2 / UCRT64)
 
-### Compile the project
-
+```bash
+cd /c/Users/USER/Desktop/password_vault
+gcc -Iinclude src/*.c -o PasswordVault $(pkg-config --cflags --libs gtk+-3.0)
+./PasswordVault.exe
 ```
-gcc src/*.c -Iinclude `pkg-config --cflags --libs gtk+-3.0` -o password_vault
-```
 
----
+### Compile and run (Linux)
 
-### Run the application
-
-```
-./password_vault
+```bash
+gcc src/*.c -Iinclude $(pkg-config --cflags --libs gtk+-3.0) -o PasswordVault
+./PasswordVault
 ```
 
 ---
@@ -352,10 +437,12 @@ gcc src/*.c -Iinclude `pkg-config --cflags --libs gtk+-3.0` -o password_vault
 
 This project demonstrates:
 
-* Modular C architecture
+* Modular C architecture with clean layering
 * GTK GUI programming
-* File-based encrypted storage
-* Separation of UI and business logic
+* File-based encrypted storage separated by concern
+* Separation of UI, business logic, and infrastructure
+* Dependency injection via `AppState*`
+* Information hiding with `static` scope
 * AI-assisted code refactoring
 
 ---

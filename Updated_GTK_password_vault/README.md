@@ -16,9 +16,10 @@
    - [Naming Conventions](#3-naming-conventions)
    - [Function Naming & Module Prefixing](#4-function-naming--module-prefixing)
    - [Encryption Workflow Encapsulation](#5-encryption-workflow-encapsulation)
-   - [Cleanup Safety](#6-cleanup-null-safety)
-   - [Static Scope — Information Hiding](#7-static-scope--information-hiding)
-4. [Architecture](#-architecture)
+   - [Data File Separation](#6-data-file-separation)
+   - [Cleanup Null Safety](#7-cleanup-null-safety)
+   - [Static Scope — Information Hiding](#8-static-scope--information-hiding)
+4. [Architecture](#️-architecture)
 5. [Module Breakdown](#-module-breakdown)
 6. [File Structure](#-file-structure)
 7. [Encryption Workflow](#-encryption-workflow)
@@ -50,12 +51,12 @@ The project was developed in two distinct phases:
 | **Header files (.h)** | 0 | 8 | Clean public interfaces |
 | **Data files** | 1 (`vault.dat`) | 3 (`vault.dat`, `vault_creds.dat`, `vault_master.dat`) | Separated by concern |
 | **Global variables** | **Multiple** (`main_window`, `credential_list`, `master_pass`, `login_success`, etc.) | **0** | Complete elimination |
-| **Naming convention — functions** | Mixed (`LoadCredentials`, `crypto_encrypt`, `refresh_ui`) | Uniform descriptive style per module | Consistent throughout |
+| **Naming convention — functions** | Mixed (`LoadCredentials`, `crypto_encrypt`, `refresh_ui`) | Uniform `module_verb_object()` style per module | Consistent throughout |
 | **Struct fields** | Mixed `snake_case` and abbreviated names | Uniform `snake_case` with descriptive names | Consistent throughout |
 | **Struct type names** | Inconsistent casing | All `PascalCase` (`AppState`, `Credential`) | Standard enforced |
-| **Encryption calls** | Scattered raw XOR inline across multiple functions | Encapsulated behind `encryption.h` | Single responsibility |
+| **Encryption calls** | Scattered raw XOR inline across multiple functions | Encapsulated behind `encryption.h` using master password as key | Single responsibility |
 | **File I/O** | Inline in multiple places | Isolated to `vault_storage.c` | Encapsulated |
-| **Dialog management** | Inline GTK dialog code mixed with logic | Isolated to `dialogs.c` | Encapsulated |
+| **Dialog management** | Inline GTK dialog code mixed with logic | Isolated to `dialogs.c` — no `AppState` dependency | Encapsulated |
 | **Cleanup safety** | Unconditional free — crash risk | All handles null-checked before free | Crash-safe |
 | **Documentation** | Zero comments | Full Doxygen `@brief/@param/@return` on every function | Fully documented |
 | **Context passing** | Functions read globals directly | `AppState*` passed explicitly | Dependency Injection |
@@ -87,18 +88,18 @@ Updated_GTK_password_vault/
 │   ├── app_state.h         ← AppState struct + all constants
 │   ├── credential.h        ← Credential struct definition
 │   ├── dialogs.h           ← GTK dialog function declarations
-│   ├── encryption.h        ← Encrypt/decrypt function declarations
-│   ├── master_auth.h       ← Master password auth declarations
-│   ├── service_manager.h   ← Credential CRUD declarations
-│   ├── ui.h                ← UI construction declarations
-│   └── vault_storage.h     ← File I/O declarations
+│   ├── encryption.h        ← encryption_encrypt / encryption_decrypt declarations
+│   ├── master_auth.h       ← master_auth_* declarations
+│   ├── service_manager.h   ← service_manager_* declarations
+│   ├── ui.h                ← ui_* declarations
+│   └── vault_storage.h     ← vault_storage_* declarations
 │
 └── src/
     ├── main.c              ← Entry point only (~25 lines)
-    ├── dialogs.c           ← All GTK dialog construction
-    ├── encryption.c        ← XOR encrypt/decrypt logic
-    ├── master_auth.c       ← Master password & recovery
-    ├── service_manager.c   ← Credential add/delete/list
+    ├── dialogs.c           ← All GTK dialog construction (no AppState dependency)
+    ├── encryption.c        ← XOR encrypt/decrypt using master key
+    ├── master_auth.c       ← Master password setup, verify, recovery
+    ├── service_manager.c   ← Credential add/delete/load/search
     ├── ui.c                ← GTK window construction & wiring
     └── vault_storage.c     ← vault_creds.dat & vault_master.dat I/O
 ```
@@ -155,7 +156,7 @@ All identifiers were renamed to follow a strict, uniform convention across the e
 | Parameters | Mixed | `snake_case` | Always |
 | Struct type names | Mixed casing | `PascalCase` | Always |
 | Struct members | Mixed | `snake_case` | Always |
-| Functions | Mixed flat naming | Descriptive `module_verb_object()` | Always |
+| Functions | Mixed flat naming | `module_verb_object()` | Always |
 | Header guards | Absent | `UPPER_SNAKE_CASE_H` | Always |
 
 **Struct field renames (sample):**
@@ -166,6 +167,14 @@ All identifiers were renamed to follow a strict, uniform convention across the e
 | `credList` | `credentials` | Full word |
 | `loginOk` | `login_success` | Clear boolean name |
 | `win` | `main_window` | Unambiguous |
+
+**`Credential` struct field renames:**
+
+| ver1 Field | ver2 Field | Note |
+|---|---|---|
+| `service` | `service_name` | Full descriptive name |
+| `username` | `username` | Unchanged |
+| `password` | `password` | Unchanged |
 
 ---
 
@@ -203,7 +212,7 @@ Every function was renamed from inconsistent flat naming to a clear **module-des
 | `service_manager.c` | `service_manager.h` | Credential add, delete, list, search |
 | `vault_storage.c` | `vault_storage.h` | Read/write `vault_creds.dat` & `vault_master.dat` |
 | `encryption.c` | `encryption.h` | XOR encrypt and decrypt — no other dependencies |
-| `dialogs.c` | `dialogs.h` | All GTK dialog construction and display |
+| `dialogs.c` | `dialogs.h` | All GTK dialog construction and display — no `AppState` dependency |
 | `ui.c` | `ui.h` | GTK window construction, wiring, refresh |
 | `main.c` | — | Entry point only — init, launch, cleanup |
 
@@ -325,6 +334,7 @@ Only functions declared in a `.h` header have external linkage. Everything else 
 ║   │                                                          │  ║
 ║   │  dialogs_show_error()   dialogs_show_input()             │  ║
 ║   │  dialogs_show_confirm()                                  │  ║
+║   │  (no AppState dependency)                                │  ║
 ║   └──────────────────────────────────────────────────────────┘  ║
 ╚══════════════════════════════════════════════════════════════════╝
                               │
@@ -386,7 +396,7 @@ Only functions declared in a `.h` header have external linkage. Everything else 
 ## 🧩 Module Breakdown
 
 ### `src/main.c` — ~25 lines
-Minimal entry point. Calls `gtk_init()`, allocates `AppState` with `g_new0()`, launches the UI, runs `gtk_main()`, then calls `app_cleanup()`. Nothing else lives here.
+Minimal entry point. Calls `gtk_init()`, allocates `AppState` with `g_new0()`, launches the UI via `ui_build_main_window()`, runs `gtk_main()`, then calls `app_cleanup()`. Nothing else lives here.
 
 ### `src/master_auth.c` / `include/master_auth.h`
 All authentication logic. `master_auth_setup()` handles first-run master password creation. `master_auth_verify()` compares input against `vault_master.dat`. `master_auth_recover()` validates the recovery answer and allows password reset. No GTK widget construction happens here — dialog prompts are delegated to `dialogs.c`.
@@ -395,13 +405,13 @@ All authentication logic. `master_auth_setup()` handles first-run master passwor
 Credential list management. `service_manager_add()` appends to `app->credentials` and triggers a vault save. `service_manager_delete()` removes by index. `service_manager_load_all()` populates the list from the decrypted `vault_creds.dat`. The `static` helper `service_manager_find_dup()` prevents storing the same service name twice.
 
 ### `src/vault_storage.c` / `include/vault_storage.h`
-Encrypted disk persistence, split across two data files. `vault_storage_save_creds()` and `vault_storage_load_creds()` operate on `vault_creds.dat`. `vault_storage_save_master()` and `vault_storage_load_master()` operate on `vault_master.dat`. All encryption is delegated to `encryption.c` — no XOR logic lives here.
+Encrypted disk persistence, split across two data files. `vault_storage_save_creds()` and `vault_storage_load_creds()` operate exclusively on `vault_creds.dat`. `vault_storage_save_master()` and `vault_storage_load_master()` operate exclusively on `vault_master.dat`. All encryption is delegated to `encryption.c` — no XOR logic lives here.
 
 ### `src/encryption.c` / `include/encryption.h`
-Pure encryption utility — no GTK, no `AppState`, no file I/O. `encryption_encrypt()` and `encryption_decrypt()` operate only on char buffers and a key string. Because XOR is symmetric, decrypt delegates directly to encrypt. Swapping the algorithm requires touching **only this file**.
+Pure encryption utility — no GTK, no `AppState`, no file I/O. `encryption_encrypt()` and `encryption_decrypt()` operate only on char buffers using the master password as the key. Because XOR is symmetric, `encryption_decrypt()` delegates directly to `encryption_encrypt()`. Swapping the algorithm requires touching **only this file**.
 
 ### `src/dialogs.c` / `include/dialogs.h`
-All GTK dialog construction in one place. `dialogs_show_error()`, `dialogs_show_input()`, and `dialogs_show_confirm()` centralize every pop-up in the application. Other modules call these instead of constructing `GtkDialog` inline.
+All GTK dialog construction in one place. `dialogs_show_error()`, `dialogs_show_input()`, and `dialogs_show_confirm()` centralize every pop-up in the application. **This module has no dependency on `AppState`** — it accepts only a `GtkWidget *parent` pointer. Other modules call these functions instead of constructing `GtkDialog` inline.
 
 ### `src/ui.c` / `include/ui.h`
 GTK window construction and event wiring. `ui_build_main_window()` constructs the full application layout. `ui_refresh_services()` clears and repopulates the credential list view from `app->credentials`. All GTK signal callbacks (`on_login_clicked`, `on_add_clicked`, `on_delete_clicked`) are `static` — invisible outside this file.
@@ -419,22 +429,22 @@ Updated_GTK_password_vault/
 │   └── vault_master.dat       ← Encrypted master password record
 │
 ├── include/
-│   ├── app_state.h            ← AppState struct + constants
-│   ├── credential.h           ← Credential struct definition
-│   ├── dialogs.h              ← GTK dialog declarations
-│   ├── encryption.h           ← encryption_encrypt / encryption_decrypt
-│   ├── master_auth.h          ← master_auth_* declarations
-│   ├── service_manager.h      ← service_manager_* declarations
-│   ├── ui.h                   ← ui_* declarations
-│   └── vault_storage.h        ← vault_storage_* declarations
+│   ├── app_state.h            ← AppState struct + constants (MAX_LEN)
+│   ├── credential.h           ← Credential struct (service_name, username, password)
+│   ├── dialogs.h              ← dialogs_show_error/input/confirm declarations
+│   ├── encryption.h           ← encryption_encrypt / encryption_decrypt declarations
+│   ├── master_auth.h          ← master_auth_setup/verify/recover declarations
+│   ├── service_manager.h      ← service_manager_add/delete/load_all declarations
+│   ├── ui.h                   ← ui_build_main_window / ui_refresh_services declarations
+│   └── vault_storage.h        ← vault_storage_save/load_creds/master declarations
 │
 └── src/
     ├── main.c                 ← Entry point (~25 lines)
-    ├── dialogs.c              ← All GTK dialogs
-    ├── encryption.c           ← XOR encrypt/decrypt
-    ├── master_auth.c          ← Master password & recovery
+    ├── dialogs.c              ← All GTK dialogs (no AppState dependency)
+    ├── encryption.c           ← XOR encrypt/decrypt using master key
+    ├── master_auth.c          ← Master password & recovery logic
     ├── service_manager.c      ← Credential management
-    ├── ui.c                   ← GTK window & callbacks
+    ├── ui.c                   ← GTK window & static callbacks
     └── vault_storage.c        ← vault_creds.dat & vault_master.dat I/O
 ```
 
@@ -490,7 +500,7 @@ encryption_encrypt(master, key)  encryption_decrypt(stored, key)
 vault_storage_save_master()      Compare → set app->login_success
 ```
 
-> ⚠️ **Note:** The current implementation uses XOR-based encryption, suitable for a lab context. For production use, AES-256 with PBKDF2 key derivation is strongly recommended.
+> ⚠️ **Note:** The current implementation uses XOR-based encryption keyed on the master password, suitable for a lab context. For production use, AES-256 with PBKDF2 key derivation is strongly recommended.
 
 ---
 
@@ -525,7 +535,7 @@ void service_manager_add(AppState *app, const char *service,
 **Example — `encryption.h`:**
 ```c
 /**
- * @brief Encrypts a plaintext buffer using XOR with the provided key.
+ * @brief Encrypts a plaintext buffer using XOR keyed on the master password.
  *
  * @param input   Null-terminated plaintext string to encrypt.
  * @param key     Null-terminated key derived from the master password.
@@ -564,26 +574,26 @@ encryption, dialog management, and file I/O all in one place.
 
 Refactor it into the following modular file structure without changing any logic:
 
-  include/app_state.h      — AppState struct and all #define constants
-  include/credential.h     — Credential struct definition
-  include/dialogs.h        — declarations for GTK dialog functions
-  include/encryption.h     — declarations for encrypt/decrypt functions
-  include/master_auth.h    — declarations for authentication functions
+  include/app_state.h       — AppState struct and all #define constants
+  include/credential.h      — Credential struct definition
+  include/dialogs.h         — declarations for GTK dialog functions
+  include/encryption.h      — declarations for encrypt/decrypt functions
+  include/master_auth.h     — declarations for authentication functions
   include/service_manager.h — declarations for credential CRUD functions
-  include/ui.h             — declarations for UI construction functions
-  include/vault_storage.h  — declarations for file I/O functions
+  include/ui.h              — declarations for UI construction functions
+  include/vault_storage.h   — declarations for file I/O functions
 
-  src/main.c               — gtk_init, AppState allocation, ui launch, gtk_main only
-  src/dialogs.c            — all GTK dialog construction
-  src/encryption.c         — XOR encrypt and decrypt only
-  src/master_auth.c        — master password setup, verify, recovery
-  src/service_manager.c    — credential add, delete, load, search
-  src/ui.c                 — GTK window construction and signal wiring
-  src/vault_storage.c      — vault_creds.dat and vault_master.dat read/write
+  src/main.c                — gtk_init, AppState allocation, ui launch, gtk_main only
+  src/dialogs.c             — all GTK dialog construction (no AppState dependency)
+  src/encryption.c          — XOR encrypt and decrypt only, using master key
+  src/master_auth.c         — master password setup, verify, recovery
+  src/service_manager.c     — credential add, delete, load, search
+  src/ui.c                  — GTK window construction and signal wiring
+  src/vault_storage.c       — vault_creds.dat and vault_master.dat read/write
 
-  data/vault.dat           — vault metadata
-  data/vault_creds.dat     — credential entries (separate from master)
-  data/vault_master.dat    — master password record (separate from credentials)
+  data/vault.dat            — vault metadata
+  data/vault_creds.dat      — credential entries (separate from master)
+  data/vault_master.dat     — master password record (separate from credentials)
 
 Rules:
 - Do not change any logic, algorithms, or values
@@ -592,6 +602,7 @@ Rules:
 - Header files must use include guards (#ifndef / #define / #endif)
 - GTK signal callbacks must be declared static in ui.c
 - Master password storage and credential storage must be in separate data files
+- dialogs.c must NOT depend on AppState
 ```
 
 ---
@@ -640,14 +651,14 @@ in the entire codebase:
   Header guards       → UPPER_SNAKE_CASE_H
 
 Function naming table by module:
-  master_auth.c    → master_auth_setup(), master_auth_verify(), master_auth_recover()
+  master_auth.c     → master_auth_setup(), master_auth_verify(), master_auth_recover()
   service_manager.c → service_manager_add(), service_manager_delete(),
                       service_manager_load_all()
-  vault_storage.c  → vault_storage_save_creds(), vault_storage_load_creds(),
+  vault_storage.c   → vault_storage_save_creds(), vault_storage_load_creds(),
                       vault_storage_save_master(), vault_storage_load_master()
-  encryption.c     → encryption_encrypt(), encryption_decrypt()
-  dialogs.c        → dialogs_show_error(), dialogs_show_input(), dialogs_show_confirm()
-  ui.c             → ui_build_main_window(), ui_refresh_services()
+  encryption.c      → encryption_encrypt(), encryption_decrypt()
+  dialogs.c         → dialogs_show_error(), dialogs_show_input(), dialogs_show_confirm()
+  ui.c              → ui_build_main_window(), ui_refresh_services()
 
 Apply every rename at both the definition site and all call sites.
 Do not change any logic or struct field values.
@@ -694,6 +705,7 @@ once inside the save function and once inside the load function:
 Refactor by:
 1. Creating encryption_encrypt() and encryption_decrypt() in src/encryption.c:
    - Both accept: const char *input, const char *key, char *output
+   - The key parameter is the session master password (app->session_master)
    - Since XOR is symmetric, encryption_decrypt() may call encryption_encrypt()
    - These functions must have NO dependency on AppState or GTK
 
@@ -847,6 +859,8 @@ DATA FILES
 
 ENCRYPTION
 - All XOR logic moves exclusively to encryption.c
+- encryption_encrypt() and encryption_decrypt() accept (input, key, output)
+- The key is always app->session_master — passed by the caller
 - encryption.c must have zero dependency on AppState or GTK
 - vault_storage.c delegates all crypto to encryption_encrypt / encryption_decrypt
 
@@ -903,19 +917,19 @@ Do not change any game logic, values, or algorithms beyond what is listed above.
 ### Via Makefile
 ```bash
 make
-./password_vault
+./PasswordVault.exe
 ```
 
-### Manual (Windows MSYS2)
-```powershell
-gcc src/*.c -o password_vault.exe \
-    -Iinclude \
-    $(pkg-config --cflags --libs gtk+-3.0)
+### Manual (Windows MSYS2 / UCRT64)
+```bash
+cd /c/Users/USER/Desktop/password_vault
+gcc -Iinclude src/*.c -o PasswordVault $(pkg-config --cflags --libs gtk+-3.0)
+./PasswordVault.exe
 ```
 
 ### Manual (Linux)
 ```bash
-gcc src/*.c -o password_vault \
+gcc src/*.c -o PasswordVault \
     -Iinclude \
     $(pkg-config --cflags --libs gtk+-3.0)
 ```

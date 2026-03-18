@@ -2,9 +2,11 @@
 #define UI_H
 
 #include "app_state.h"
-#include "vault_storage.h"
 
+// Create the main application window and widgets
 AppState* ui_create_app(void);
-void ui_refresh_services(AppState *app);
+
+// Refresh service buttons in the main window
+void ui_refresh_services(AppState *app_state);
 
 #endif // UI_H
