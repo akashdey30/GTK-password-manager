@@ -23,11 +23,18 @@ pacman -S mingw-w64-ucrt-x86_64-gtk4 \
 
 ---
 
-## Step 2 — Navigate to the project
+## Step 2 — Clone the repository and navigate to the project
 
 ```bash
-cd /c/Users/USER/Claude/Full_Password_Manager
+# Clone (if you haven't already)
+git clone https://github.com/<your-username>/GTK-password-manager.git
+
+# Navigate to the project folder
+cd GTK-password-manager/GTK_Password_Manager
 ```
+
+> Replace `<your-username>` with your actual GitHub username, and adjust the path
+> if you cloned the repo to a custom location.
 
 ---
 
@@ -86,8 +93,9 @@ pacman -S mingw-w64-ucrt-x86_64-gtk4 \
            mingw-w64-ucrt-x86_64-adwaita-icon-theme \
            make
 
-# Navigate to project
-cd /c/Users/USER/Claude/Full_Password_Manager
+# Clone and navigate to project
+git clone https://github.com/<your-username>/GTK-password-manager.git
+cd GTK-password-manager/GTK_Password_Manager
 
 # Build
 make
@@ -101,7 +109,8 @@ make
 ## Subsequent runs (after first install)
 
 ```bash
-cd /c/Users/USER/Claude/Full_Password_Manager
+# Navigate to wherever you cloned the project
+cd /path/to/GTK-password-manager/GTK_Password_Manager
 make run
 ```
 
@@ -126,10 +135,13 @@ pacman -S mingw-w64-ucrt-x86_64-adwaita-icon-theme
 ```
 
 ### Bundle DLLs to run the .exe outside MSYS2
+
+From inside the project root:
+
 ```bash
-cd /c/Users/USER/Claude/Full_Password_Manager
 ldd build/gtk-password-vault.exe | grep ucrt64 | awk '{print $3}' | xargs -I{} cp {} build/
 ```
+
 After this, `build/gtk-password-vault.exe` can be double-clicked from Windows Explorer.
 
 ---
@@ -140,5 +152,11 @@ On first launch a master password setup screen appears.
 The vault database is created at:
 
 ```
-C:\Users\USER\AppData\Local\gtk-password-vault\vault.db
+%LOCALAPPDATA%\gtk-password-vault\vault.db
+```
+
+Which typically resolves to:
+
+```
+C:\Users\<YourUsername>\AppData\Local\gtk-password-vault\vault.db
 ```
