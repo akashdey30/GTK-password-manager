@@ -1,11 +1,1 @@
-[2026-03-30 13:32:51] [INFO ] === GTK Password Vault started ===
-[2026-03-30 13:32:51] [INFO ] First run — showing master password setup
-[2026-03-30 13:34:03] [INFO ] Master password set successfully on first run
-[2026-03-30 13:34:43] [INFO ] Credential added: Gmail
-[2026-03-30 13:35:13] [INFO ] Credential added: Gmail
-[2026-03-30 13:35:29] [INFO ] Credential added: YouTube
-[2026-03-30 13:35:52] [INFO ] Credential added: YouTube
-[2026-03-30 13:36:50] [INFO ] Master password changed
-[2026-03-30 13:36:53] [INFO ] Vault locked
-[2026-03-30 13:37:00] [INFO ] Clean shutdown
-[2026-03-30 13:37:00] [INFO ] === GTK Password Vault stopped ===
+
